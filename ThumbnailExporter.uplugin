@@ -1,16 +1,16 @@
 {
 	"FileVersion": 3,
-	"Version": 1,
-	"VersionName": "1.0",
-	"FriendlyName": "Blueprint Thumbnail Exporter",
-	"Description": "Lets you export blueprint thumbnails to textures that can be used in game.",
+	"Version": 2,
+	"VersionName": "1.1",
+	"FriendlyName": "Thumbnail Exporter",
+	"Description": "Lets you export asset thumbnails to textures that can be used in game.",
 	"Category": "Editor",
 	"CreatedBy": "Big Cat Energising",
 	"CreatedByURL": "",
 	"DocsURL": "",
 	"MarketplaceURL": "com.epicgames.launcher://ue/marketplace/product/975ed0d8122b4d42b01b0c695621b1b9",
 	"SupportURL": "",
-	"EngineVersion": "5.0",
+	"EngineVersion": "5.2.0",
 	"CanContainContent": false,
 	"Installed": true,
 	"Modules": [
@@ -24,5 +24,7 @@
 				"Mac"
 			]
 		}
-	]
+	],
+	"IsBetaVersion": false,
+	"IsExperimentalVersion": false
 }
