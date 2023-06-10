@@ -7,6 +7,15 @@
 #include "EngineUtils.h"
 #include "ThumbnailRendering/SceneThumbnailInfo.h"
 
+static USkeletalMesh* GetSkeletalMesh(USkeletalMeshComponent* SkelMeshComp)
+{
+#if ENGINE_MINOR_VERSION == 0
+	return SkelMeshComp->SkeletalMesh;
+#else
+	return SkelMeshComp->GetSkeletalMeshAsset();
+#endif
+}
+
 FThumbnailExporterScene::FThumbnailExporterScene(bool bInHideBackgroundMeshes)
 	: FThumbnailPreviewScene()
 	, bHideBackgroundMeshes(bInHideBackgroundMeshes)
@@ -70,7 +79,7 @@ bool FThumbnailExporterScene::IsValidComponentForVisualization(UActorComponent* 
 		}
 
 		USkeletalMeshComponent* SkelMeshComp = Cast<USkeletalMeshComponent>(Component);
-		if (SkelMeshComp && SkelMeshComp->SkeletalMesh)
+		if (SkelMeshComp && GetSkeletalMesh(SkelMeshComp))
 		{
 			return true;
 		}
