@@ -68,7 +68,7 @@ bool FThumbnailExporterModule::CanCreateThumbnail(const TArray<FAssetData>& Sele
 
 	for (const FAssetData& AssetData : SelectedAssets)
 	{
-		if (AssetData.IsValid() && AssetData.GetClass()->IsChildOf(UBlueprint::StaticClass()))
+		if (AssetData.IsValid())
 		{
 			if (ThumbnailRenderer->CanVisualizeAsset(AssetData.GetAsset()))
 			{

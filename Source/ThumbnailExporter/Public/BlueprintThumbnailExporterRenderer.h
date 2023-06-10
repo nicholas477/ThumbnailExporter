@@ -9,9 +9,6 @@
 struct FThumbnailCreationConfig;
 class FThumbnailExporterScene;
 
-/**
- * 
- */
 UCLASS()
 class THUMBNAILEXPORTER_API UBlueprintThumbnailExporterRenderer : public UBlueprintThumbnailRenderer
 {

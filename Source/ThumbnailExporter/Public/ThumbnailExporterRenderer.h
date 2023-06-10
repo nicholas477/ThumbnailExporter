@@ -8,9 +8,6 @@
 struct FThumbnailCreationConfig;
 class FObjectThumbnail;
 
-/**
- * 
- */
 class THUMBNAILEXPORTER_API FThumbnailExporterRenderer
 {
 public:

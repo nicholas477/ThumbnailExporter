@@ -5,68 +5,9 @@
 
 #include "ThumbnailExporterSettings.h"
 #include "ThumbnailExporterThumbnailDummy.h"
-#include "ThumbnailHelpers.h"
+#include "ThumbnailExporterScene.h"
 #include "CanvasTypes.h"
-#include "ContentStreaming.h"
 #include "EngineUtils.h"
-
-class FThumbnailExporterScene : public FBlueprintThumbnailScene
-{
-public:
-	FThumbnailExporterScene(bool bInHideBackgroundMeshes)
-		: FBlueprintThumbnailScene(), bHideBackgroundMeshes(bInHideBackgroundMeshes)
-	{
-		// Iterate over all of the objects inside the scene and hide them
-
-		const UWorld* MyWorld = GetWorld();
-		for (TObjectIterator<UActorComponent> ObjectItr; ObjectItr; ++ObjectItr)
-		{
-			// skip if this object is not associated with our current game world
-			if (ObjectItr->GetWorld() != MyWorld)
-			{
-				continue;
-			}
-
-			UActorComponent* Component = *ObjectItr;
-			if (UStaticMeshComponent* MeshComponent = Cast<UStaticMeshComponent>(Component))
-			{
-				if (bHideBackgroundMeshes)
-				{
-					MeshComponent->SetRenderInMainPass(false);
-				}
-			}
-			else
-			{
-				continue;
-			}
-		}
-	}
-
-	virtual ~FThumbnailExporterScene()
-	{
-
-	}
-
-	/** Allocates then adds an FSceneView to the ViewFamily. */
-	FSceneView* CreateView(FSceneViewFamily* ViewFamily, int32 X, int32 Y, uint32 SizeX, uint32 SizeY) const
-	{
-		FSceneView* View = FThumbnailPreviewScene::CreateView(ViewFamily, X, Y, SizeX, SizeY);
-
-		View->bIsSceneCapture = true;
-
-		const float FOVDegrees = 30.f;
-
-		for (TActorIterator<AActor> It(GetWorld()); It; ++It)
-		{
-			IStreamingManager::Get().AddViewInformation(View->ViewMatrices.GetViewOrigin(), SizeX, SizeX / FMath::Tan(FOVDegrees), 10.f, false, 5.f, *It);
-		}
-		IStreamingManager::Get().StreamAllResources();
-
-		return View;
-	}
-
-	bool bHideBackgroundMeshes;
-};
 
 UBlueprintThumbnailExporterRenderer::UBlueprintThumbnailExporterRenderer(const FObjectInitializer& ObjectInitializer)
 	: Super(ObjectInitializer)
@@ -122,6 +63,11 @@ void UBlueprintThumbnailExporterRenderer::DrawThumbnailWithConfig(const FThumbna
 bool UBlueprintThumbnailExporterRenderer::CanVisualizeAsset(UObject* Object)
 {
 	if (Cast<UThumbnailExporterThumbnailDummy>(Object))
+	{
+		return true;
+	}
+
+	if (Cast<UStaticMesh>(Object))
 	{
 		return true;
 	}
