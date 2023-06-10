@@ -22,6 +22,7 @@ UBlueprintThumbnailExporterRenderer::~UBlueprintThumbnailExporterRenderer()
 
 void UBlueprintThumbnailExporterRenderer::DrawThumbnailWithConfig(const FThumbnailCreationConfig& CreationConfig, UObject* Object, int32 X, int32 Y, uint32 Width, uint32 Height, FRenderTarget* RenderTarget, FCanvas* Canvas, bool bAdditionalViewFamily)
 {
+	bool bCanRender = false;
 	UBlueprint* Blueprint = Cast<UBlueprint>(Object);
 
 	// Strict validation - it may hopefully fix UE-35705.
@@ -36,6 +37,24 @@ void UBlueprintThumbnailExporterRenderer::DrawThumbnailWithConfig(const FThumbna
 		FThumbnailExporterScene& ThumbnailScene = GetThumbnailScene(CreationConfig);
 
 		ThumbnailScene.SetBlueprint(Blueprint);
+
+		bCanRender = true;
+	}
+
+	UStaticMesh* StaticMesh = Cast<UStaticMesh>(Object);
+	if (IsValid(StaticMesh))
+	{
+		FThumbnailExporterScene& ThumbnailScene = GetThumbnailScene(CreationConfig);
+
+		ThumbnailScene.SetStaticMesh(StaticMesh);
+		ThumbnailScene.GetScene()->UpdateSpeedTreeWind(0.0);
+
+		bCanRender = true;
+	}
+
+	if (bCanRender)
+	{
+		FThumbnailExporterScene& ThumbnailScene = GetThumbnailScene(CreationConfig);
 		FSceneViewFamilyContext ViewFamily(FSceneViewFamily::ConstructionValues(RenderTarget, ThumbnailScene.GetScene(), FEngineShowFlags(ESFIM_Game))
 			.SetTime(UThumbnailRenderer::GetTime())
 			.SetDeferClear(true)
@@ -49,7 +68,6 @@ void UBlueprintThumbnailExporterRenderer::DrawThumbnailWithConfig(const FThumbna
 		ViewFamily.EngineShowFlags.LOD = 0;
 		ViewFamily.EngineShowFlags.AntiAliasing = 0;
 		ViewFamily.EngineShowFlags.Bloom = CreationConfig.bEnableBloom;
-		//ViewFamily.EngineShowFlags.
 
 		ViewFamily.SceneCaptureSource = CreationConfig.ThumbnailCaptureSource;
 		ViewFamily.SceneCaptureCompositeMode = CreationConfig.ThumbnailCompositeMode;
@@ -90,7 +108,7 @@ FThumbnailExporterScene& UBlueprintThumbnailExporterRenderer::GetThumbnailScene(
 {
 	for (FThumbnailExporterScene* ThumbnailScene : ThumbnailScenes)
 	{
-		if (ThumbnailScene->bHideBackgroundMeshes == CreationConfig.bHideThumbnailBackgroundMeshes)
+		if (ThumbnailScene->GetBackgroundMeshesHidden() == CreationConfig.bHideThumbnailBackgroundMeshes)
 		{
 			return *ThumbnailScene;
 		}

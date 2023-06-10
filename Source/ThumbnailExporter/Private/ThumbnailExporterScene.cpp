@@ -6,6 +6,7 @@
 #include "ContentStreaming.h"
 #include "EngineUtils.h"
 #include "ThumbnailRendering/SceneThumbnailInfo.h"
+#include "Engine/StaticMeshActor.h"
 
 static USkeletalMesh* GetSkeletalMesh(USkeletalMeshComponent* SkelMeshComp)
 {
@@ -104,23 +105,89 @@ void FThumbnailExporterScene::BlueprintChanged(UBlueprint* Blueprint)
 	}
 }
 
+void FThumbnailExporterScene::SetStaticMesh(UStaticMesh* StaticMesh)
+{
+	SpawnPreviewActor(AStaticMeshActor::StaticClass());
+
+	if (AStaticMeshActor* StaticMeshPreview = Cast<AStaticMeshActor>(PreviewActor))
+	{
+		StaticMeshPreview->GetStaticMeshComponent()->SetStaticMesh(StaticMesh);
+
+		if (StaticMesh)
+		{
+			FTransform MeshTransform = FTransform::Identity;
+
+			PreviewActor->SetActorLocation(FVector(0, 0, 0), false);
+
+			//Force LOD 0
+			StaticMeshPreview->GetStaticMeshComponent()->ForcedLodModel = 1;
+
+			StaticMeshPreview->GetStaticMeshComponent()->UpdateBounds();
+
+			// Center the mesh at the world origin then offset to put it on top of the plane
+			const float BoundsZOffset = GetBoundsZOffset(StaticMeshPreview->GetStaticMeshComponent()->Bounds);
+			PreviewActor->SetActorLocation(-StaticMeshPreview->GetStaticMeshComponent()->Bounds.Origin + FVector(0, 0, BoundsZOffset), false);
+		}
+
+		StaticMeshPreview->GetStaticMeshComponent()->RecreateRenderState_Concurrent();
+	}
+}
+
+void FThumbnailExporterScene::SetOverrideMaterials(const TArray<class UMaterialInterface*>& OverrideMaterials)
+{
+	if (AStaticMeshActor* StaticMeshPreview = Cast<AStaticMeshActor>(PreviewActor))
+	{
+		StaticMeshPreview->GetStaticMeshComponent()->OverrideMaterials = OverrideMaterials;
+		StaticMeshPreview->GetStaticMeshComponent()->MarkRenderStateDirty();
+	}
+}
+
 void FThumbnailExporterScene::GetViewMatrixParameters(const float InFOVDegrees, FVector& OutOrigin, float& OutOrbitPitch, float& OutOrbitYaw, float& OutOrbitZoom) const
 {
-	const float HalfFOVRadians = FMath::DegreesToRadians<float>(InFOVDegrees) * 0.5f;
-	// Add extra size to view slightly outside of the sphere to compensate for perspective
-	const FBoxSphereBounds Bounds = GetPreviewActorBounds();
+	if (AStaticMeshActor* StaticMeshPreview = Cast<AStaticMeshActor>(PreviewActor))
+	{
+		const float HalfFOVRadians = FMath::DegreesToRadians<float>(InFOVDegrees) * 0.5f;
+		// Add extra size to view slightly outside of the sphere to compensate for perspective
+		const float HalfMeshSize = StaticMeshPreview->GetStaticMeshComponent()->Bounds.SphereRadius * 1.15;
+		const float BoundsZOffset = GetBoundsZOffset(StaticMeshPreview->GetStaticMeshComponent()->Bounds);
+		const float TargetDistance = HalfMeshSize / FMath::Tan(HalfFOVRadians);
 
-	const float HalfMeshSize = Bounds.SphereRadius * 1.15;
-	const float BoundsZOffset = GetBoundsZOffset(Bounds);
-	const float TargetDistance = HalfMeshSize / FMath::Tan(HalfFOVRadians);
+		USceneThumbnailInfo* ThumbnailInfo = Cast<USceneThumbnailInfo>(StaticMeshPreview->GetStaticMeshComponent()->GetStaticMesh()->ThumbnailInfo);
+		if (ThumbnailInfo)
+		{
+			if (TargetDistance + ThumbnailInfo->OrbitZoom < 0)
+			{
+				ThumbnailInfo->OrbitZoom = -TargetDistance;
+			}
+		}
+		else
+		{
+			ThumbnailInfo = USceneThumbnailInfo::StaticClass()->GetDefaultObject<USceneThumbnailInfo>();
+		}
 
-	USceneThumbnailInfo* ThumbnailInfo = GetSceneThumbnailInfo(TargetDistance);
-	check(ThumbnailInfo);
+		OutOrigin = FVector(0, 0, -BoundsZOffset);
+		OutOrbitPitch = ThumbnailInfo->OrbitPitch;
+		OutOrbitYaw = ThumbnailInfo->OrbitYaw;
+		OutOrbitZoom = TargetDistance + ThumbnailInfo->OrbitZoom;
+	}
+	else
+	{
+		const float HalfFOVRadians = FMath::DegreesToRadians<float>(InFOVDegrees) * 0.5f;
+		// Add extra size to view slightly outside of the sphere to compensate for perspective
+		const FBoxSphereBounds Bounds = GetPreviewActorBounds();
 
-	OutOrigin = FVector(0, 0, -BoundsZOffset);
-	OutOrbitPitch = ThumbnailInfo->OrbitPitch;
-	OutOrbitYaw = ThumbnailInfo->OrbitYaw;
-	OutOrbitZoom = TargetDistance + ThumbnailInfo->OrbitZoom;
+		const float HalfMeshSize = Bounds.SphereRadius * 1.15;
+		const float BoundsZOffset = GetBoundsZOffset(Bounds);
+		const float TargetDistance = HalfMeshSize / FMath::Tan(HalfFOVRadians);
+
+		USceneThumbnailInfo* ThumbnailInfo = GetSceneThumbnailInfo(TargetDistance);
+		check(ThumbnailInfo);
+
+		OutOrigin = FVector(0, 0, -BoundsZOffset);
+		OutOrbitPitch = ThumbnailInfo->OrbitPitch;
+		OutOrbitYaw = ThumbnailInfo->OrbitYaw;
+		OutOrbitZoom = TargetDistance + ThumbnailInfo->OrbitZoom;
+	}
 }
 
 void FThumbnailExporterScene::SpawnPreviewActor(UClass* InClass)

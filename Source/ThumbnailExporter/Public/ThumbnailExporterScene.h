@@ -6,6 +6,9 @@
 
 #include "ThumbnailHelpers.h"
 
+/**
+ * Thumbnail preview scene with support for both blueprints and static meshes
+ */
 class THUMBNAILEXPORTER_API FThumbnailExporterScene : public FThumbnailPreviewScene
 {
 public:
@@ -15,8 +18,6 @@ public:
 	/** Allocates then adds an FSceneView to the ViewFamily. */
 	FSceneView* CreateView(FSceneViewFamily* ViewFamily, int32 X, int32 Y, uint32 SizeX, uint32 SizeY) const;
 
-	bool bHideBackgroundMeshes;
-
 	/** Returns true if this component can be visualized */
 	static bool IsValidComponentForVisualization(UActorComponent* Component);
 
@@ -25,6 +26,15 @@ public:
 
 	/** Refreshes components for the specified blueprint */
 	void BlueprintChanged(class UBlueprint* Blueprint);
+
+	/** Sets the static mesh to use in the next CreateView() */
+	void SetStaticMesh(class UStaticMesh* StaticMesh);
+
+	/** Sets override materials for the static mesh  */
+	void SetOverrideMaterials(const TArray<class UMaterialInterface*>& OverrideMaterials);
+
+	bool GetBackgroundMeshesHidden() const { return bHideBackgroundMeshes; }
+	TWeakObjectPtr<class AActor> GetPreviewActor() const { return PreviewActor; }
 
 protected:
 	// FThumbnailPreviewScene implementation
@@ -40,6 +50,8 @@ protected:
 
 	/** Clears out any stale actors in this scene if PreviewActor enters a stale state */
 	void ClearStaleActors();
+
+	bool bHideBackgroundMeshes;
 
 	int32 NumStartingActors;
 	TWeakObjectPtr<class AActor> PreviewActor;
