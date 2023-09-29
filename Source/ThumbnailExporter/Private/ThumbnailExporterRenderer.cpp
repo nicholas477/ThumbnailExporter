@@ -37,7 +37,7 @@ static void TransitionAndCopyTexture(FRHICommandList& RHICmdList, FRHITexture* S
 }
 #endif
 
-FObjectThumbnail* FThumbnailExporterRenderer::GenerateThumbnail(const FThumbnailCreationConfig& CreationConfig, UObject* InObject)
+FObjectThumbnail* FThumbnailExporterRenderer::GenerateThumbnail(FThumbnailCreationConfig& CreationConfig, UObject* InObject, const FPreCreateThumbnail& CreationDelegate)
 {
 	// Does the object support thumbnails?
 	FThumbnailRenderingInfo* RenderInfo = GUnrealEd ? GUnrealEd->GetThumbnailManager()->GetRenderingInfo(UThumbnailExporterThumbnailDummy::StaticClass()->ClassDefaultObject) : nullptr;
@@ -56,7 +56,7 @@ FObjectThumbnail* FThumbnailExporterRenderer::GenerateThumbnail(const FThumbnail
 		FObjectThumbnail NewThumbnail;
 		FThumbnailExporterRenderer::RenderThumbnail(
 			CreationConfig, InObject, ImageWidth, ImageHeight, TextureFlushMode, NULL,
-			&NewThumbnail);		// Out
+			&NewThumbnail, CreationDelegate);
 
 		UPackage* MyOutermostPackage = InObject->GetOutermost();
 		return ThumbnailTools::CacheThumbnail(InObject->GetFullName(), &NewThumbnail, MyOutermostPackage);
@@ -65,7 +65,7 @@ FObjectThumbnail* FThumbnailExporterRenderer::GenerateThumbnail(const FThumbnail
 	return NULL;
 }
 
-void FThumbnailExporterRenderer::RenderThumbnail(const FThumbnailCreationConfig& CreationConfig, UObject* InObject, const uint32 InImageWidth, const uint32 InImageHeight, ThumbnailTools::EThumbnailTextureFlushMode::Type InFlushMode, FTextureRenderTargetResource* InTextureRenderTargetResource, FObjectThumbnail* OutThumbnail)
+void FThumbnailExporterRenderer::RenderThumbnail(FThumbnailCreationConfig& CreationConfig, UObject* InObject, const uint32 InImageWidth, const uint32 InImageHeight, ThumbnailTools::EThumbnailTextureFlushMode::Type InFlushMode, FTextureRenderTargetResource* InTextureRenderTargetResource, FObjectThumbnail* OutThumbnail, const FPreCreateThumbnail& CreationDelegate)
 {
 	if (!FApp::CanEverRender())
 	{
@@ -139,24 +139,21 @@ void FThumbnailExporterRenderer::RenderThumbnail(const FThumbnailCreationConfig&
 		TGuardValue<bool> Unattended(GIsRunningUnattendedScript, true);
 
 		// Draw the thumbnail
-		const int32 XPos = 0;
-		const int32 YPos = 0;
 		const bool bAdditionalViewFamily = false;
 
 		UBlueprintThumbnailExporterRenderer* OurThumbnailRenderer = Cast<UBlueprintThumbnailExporterRenderer>(RenderInfo->Renderer);
 		check(OurThumbnailRenderer != nullptr);
 
-		OurThumbnailRenderer->DrawThumbnailWithConfig(
-			CreationConfig,
-			InObject,
-			XPos,
-			YPos,
-			InImageWidth,
-			InImageHeight,
-			RenderTargetResource,
-			&Canvas,
-			bAdditionalViewFamily
-		);
+		FThumbnailCreationParams CreationParams(CreationConfig);
+		CreationParams.Object = InObject;
+		CreationParams.Width = InImageWidth;
+		CreationParams.Height = InImageHeight;
+		CreationParams.RenderTarget = RenderTargetResource;
+		CreationParams.Canvas = &Canvas;
+		CreationParams.bAdditionalViewFamily = bAdditionalViewFamily;
+		CreationParams.CreationDelegate = CreationDelegate;
+
+		OurThumbnailRenderer->DrawThumbnailWithConfig(CreationParams);
 	}
 
 	// Tell the rendering thread to draw any remaining batched elements

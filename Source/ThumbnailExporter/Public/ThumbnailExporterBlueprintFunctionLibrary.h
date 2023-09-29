@@ -10,6 +10,8 @@
 struct FThumbnailCreationPreset;
 struct FThumbnailCreationConfig;
 
+DECLARE_DYNAMIC_DELEGATE_RetVal_TwoParams(FThumbnailCreationConfig, FPreCreateThumbnail, const struct FThumbnailCreationConfig&, CreationConfig, AActor*, ThumbnailActor);
+
 /**
  * 
  */
@@ -20,8 +22,8 @@ class THUMBNAILEXPORTER_API UThumbnailExporterBlueprintFunctionLibrary : public 
 	
 	// Exports the thumbnail to a separate texture, optionally creates a notification saying the texture was created
 	// Returns true if the creation was succesful
-	UFUNCTION(BlueprintCallable, Category = "Thumbnail Exporter")
-		static bool ExportThumbnail(const FThumbnailCreationConfig& CreationConfig, const FAssetData& Asset, FString& ThumbnailPath);
+	UFUNCTION(BlueprintCallable, Category = "Thumbnail Exporter", meta=(AutoCreateRefTerm="CreationDelegate"))
+		static bool ExportThumbnail(const FThumbnailCreationConfig& CreationConfig, const FAssetData& Asset, FString& ThumbnailPath, const FPreCreateThumbnail& CreationDelegate);
 	
 	// Returns true if a thumbnail can be created for the asset
 	UFUNCTION(BlueprintPure, Category = "Thumbnail Exporter")

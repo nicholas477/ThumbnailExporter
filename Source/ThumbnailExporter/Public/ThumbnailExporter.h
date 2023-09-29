@@ -4,6 +4,7 @@
 
 #include "CoreMinimal.h"
 #include "Modules/ModuleManager.h"
+#include "ThumbnailExporterBlueprintFunctionLibrary.h"
 
 struct FAssetData;
 struct FThumbnailCreationConfig;
@@ -18,7 +19,7 @@ public:
 
 	// Exports the thumbnail to a separate texture, optionally creates a notification saying the texture was created
 	// Returns true if the creation was succesful
-	static bool ExportThumbnail(const FThumbnailCreationConfig& CreationConfig, const FAssetData& Asset, FString& ThumbnailPath);
+	static bool ExportThumbnail(const FThumbnailCreationConfig& CreationConfig, const FAssetData& Asset, FString& ThumbnailPath, const FPreCreateThumbnail& CreationDelegate = {});
 
 	// Returns true if a thumbnail can be created for the asset(s)
 	static bool CanCreateThumbnail(const TArray<FAssetData>& Assets);

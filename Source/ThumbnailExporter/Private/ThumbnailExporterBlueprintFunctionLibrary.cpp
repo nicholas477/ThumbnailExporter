@@ -6,9 +6,9 @@
 #include "ThumbnailExporter.h"
 #include "ThumbnailExporterSettings.h"
 
-bool UThumbnailExporterBlueprintFunctionLibrary::ExportThumbnail(const FThumbnailCreationConfig& CreationConfig, const FAssetData& Asset, FString& ThumbnailPath)
+bool UThumbnailExporterBlueprintFunctionLibrary::ExportThumbnail(const FThumbnailCreationConfig& CreationConfig, const FAssetData& Asset, FString& ThumbnailPath, const FPreCreateThumbnail& CreationDelegate)
 {
-    return FModuleManager::GetModuleChecked<FThumbnailExporterModule>("ThumbnailExporter").ExportThumbnail(CreationConfig, Asset, ThumbnailPath);
+    return FModuleManager::GetModuleChecked<FThumbnailExporterModule>("ThumbnailExporter").ExportThumbnail(CreationConfig, Asset, ThumbnailPath, CreationDelegate);
 }
 
 bool UThumbnailExporterBlueprintFunctionLibrary::CanCreateThumbnail(const FAssetData& Asset)

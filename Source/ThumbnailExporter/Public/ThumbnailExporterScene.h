@@ -30,6 +30,9 @@ public:
 	/** Sets the static mesh to use in the next CreateView() */
 	void SetStaticMesh(class UStaticMesh* StaticMesh);
 
+	/** Sets the skeletal mesh to use in the next CreateView() */
+	void SetSkeletalMesh(class USkeletalMesh* InSkeletalMesh);
+
 	/** Sets override materials for the static mesh  */
 	void SetOverrideMaterials(const TArray<class UMaterialInterface*>& OverrideMaterials);
 

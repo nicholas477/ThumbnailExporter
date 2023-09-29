@@ -20,10 +20,12 @@ UBlueprintThumbnailExporterRenderer::~UBlueprintThumbnailExporterRenderer()
 
 }
 
-void UBlueprintThumbnailExporterRenderer::DrawThumbnailWithConfig(const FThumbnailCreationConfig& CreationConfig, UObject* Object, int32 X, int32 Y, uint32 Width, uint32 Height, FRenderTarget* RenderTarget, FCanvas* Canvas, bool bAdditionalViewFamily)
+void UBlueprintThumbnailExporterRenderer::DrawThumbnailWithConfig(FThumbnailCreationParams& CreationParams)
 {
 	bool bCanRender = false;
-	UBlueprint* Blueprint = Cast<UBlueprint>(Object);
+	UBlueprint* Blueprint = Cast<UBlueprint>(CreationParams.Object);
+
+	FThumbnailExporterScene* ThumbnailScene = &GetThumbnailScene(CreationParams.CreationConfig);
 
 	// Strict validation - it may hopefully fix UE-35705.
 	const bool bIsBlueprintValid = IsValid(Blueprint)
@@ -34,31 +36,33 @@ void UBlueprintThumbnailExporterRenderer::DrawThumbnailWithConfig(const FThumbna
 		&& !Blueprint->HasAnyFlags(RF_Transient);
 	if (bIsBlueprintValid)
 	{
-		FThumbnailExporterScene& ThumbnailScene = GetThumbnailScene(CreationConfig);
-
-		ThumbnailScene.SetBlueprint(Blueprint);
+		ThumbnailScene->SetBlueprint(Blueprint);
 
 		bCanRender = true;
 	}
 
-	UStaticMesh* StaticMesh = Cast<UStaticMesh>(Object);
+	UStaticMesh* StaticMesh = Cast<UStaticMesh>(CreationParams.Object);
 	if (IsValid(StaticMesh))
 	{
-		FThumbnailExporterScene& ThumbnailScene = GetThumbnailScene(CreationConfig);
+		ThumbnailScene->SetStaticMesh(StaticMesh);
+		ThumbnailScene->GetScene()->UpdateSpeedTreeWind(0.0);
 
-		ThumbnailScene.SetStaticMesh(StaticMesh);
-		ThumbnailScene.GetScene()->UpdateSpeedTreeWind(0.0);
+		bCanRender = true;
+	}
 
+	USkeletalMesh* SkeletalMesh = Cast<USkeletalMesh>(CreationParams.Object);
+	if (IsValid(SkeletalMesh))
+	{
+		ThumbnailScene->SetSkeletalMesh(SkeletalMesh);
 		bCanRender = true;
 	}
 
 	if (bCanRender)
 	{
-		FThumbnailExporterScene& ThumbnailScene = GetThumbnailScene(CreationConfig);
-		FSceneViewFamilyContext ViewFamily(FSceneViewFamily::ConstructionValues(RenderTarget, ThumbnailScene.GetScene(), FEngineShowFlags(ESFIM_Game))
+		FSceneViewFamilyContext ViewFamily(FSceneViewFamily::ConstructionValues(CreationParams.RenderTarget, ThumbnailScene->GetScene(), FEngineShowFlags(ESFIM_Game))
 			.SetTime(UThumbnailRenderer::GetTime())
 			.SetDeferClear(true)
-			.SetAdditionalViewFamily(bAdditionalViewFamily));
+			.SetAdditionalViewFamily(CreationParams.bAdditionalViewFamily));
 
 		ViewFamily.EngineShowFlags.DisableAdvancedFeatures();
 		ViewFamily.EngineShowFlags.SetScreenPercentage(false);
@@ -67,14 +71,35 @@ void UBlueprintThumbnailExporterRenderer::DrawThumbnailWithConfig(const FThumbna
 		ViewFamily.EngineShowFlags.Atmosphere = 0;
 		ViewFamily.EngineShowFlags.LOD = 0;
 		ViewFamily.EngineShowFlags.AntiAliasing = 0;
-		ViewFamily.EngineShowFlags.Bloom = CreationConfig.bEnableBloom;
+		ViewFamily.EngineShowFlags.Bloom = CreationParams.CreationConfig.bEnableBloom;
 
-		ViewFamily.SceneCaptureSource = CreationConfig.ThumbnailCaptureSource;
-		ViewFamily.SceneCaptureCompositeMode = CreationConfig.ThumbnailCompositeMode;
+		ViewFamily.SceneCaptureSource = CreationParams.CreationConfig.ThumbnailCaptureSource;
+		ViewFamily.SceneCaptureCompositeMode = CreationParams.CreationConfig.ThumbnailCompositeMode;
 
-		FSceneView* View = ThumbnailScene.CreateView(&ViewFamily, X, Y, Width, Height);
-		View->BackgroundColor = CreationConfig.GetAdjustedBackgroundColor();
-		RenderViewFamily(Canvas, &ViewFamily, View);
+		FSceneView* View = ThumbnailScene->CreateView(&ViewFamily, 0, 0, CreationParams.Width, CreationParams.Height);
+		View->BackgroundColor = CreationParams.CreationConfig.GetAdjustedBackgroundColor();
+
+		if (CreationParams.CreationDelegate.IsBound())
+		{
+			CreationParams.CreationConfig = CreationParams.CreationDelegate.Execute(CreationParams.CreationConfig, ThumbnailScene->GetPreviewActor().Get());
+		}
+
+		RenderViewFamily(CreationParams.Canvas, &ViewFamily, View);
+
+		// If we used a creation delegate, then delete the scene.
+		// The scene can be messed up by the creation delegate, so its better to just recreate it
+		if (CreationParams.CreationDelegate.IsBound())
+		{
+			for (FThumbnailExporterScene* DestroyThumbnailScene : ThumbnailScenes)
+			{
+				if (DestroyThumbnailScene == ThumbnailScene)
+				{
+					delete DestroyThumbnailScene;
+					ThumbnailScenes.Remove(ThumbnailScene);
+					break;
+				}
+			}
+		}
 	}
 }
 
@@ -86,6 +111,11 @@ bool UBlueprintThumbnailExporterRenderer::CanVisualizeAsset(UObject* Object)
 	}
 
 	if (Cast<UStaticMesh>(Object))
+	{
+		return true;
+	}
+
+	if (Cast<USkeletalMesh>(Object))
 	{
 		return true;
 	}

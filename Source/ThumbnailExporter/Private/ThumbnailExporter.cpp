@@ -198,22 +198,23 @@ static UPackage* GetAssetPackage(const FThumbnailCreationConfig& CreationConfig,
 	return Package;
 }
 
-bool FThumbnailExporterModule::ExportThumbnail(const FThumbnailCreationConfig& CreationConfig, const FAssetData& Asset, FString& ThumbnailPath)
+bool FThumbnailExporterModule::ExportThumbnail(const FThumbnailCreationConfig& CreationConfig, const FAssetData& Asset, FString& ThumbnailPath, const FPreCreateThumbnail& CreationDelegate)
 {
-	FString AssetPath, AssetFilename;
-	if (!GetThumbnailAssetPathAndFilename(CreationConfig, Asset, AssetPath, AssetFilename))
-	{
-		return false;
-	}
-	ThumbnailPath = AssetPath / AssetFilename;
-
-	FObjectThumbnail* Thumb = FThumbnailExporterRenderer::GenerateThumbnail(CreationConfig, Asset.GetAsset());
+	FThumbnailCreationConfig ModifiedCreationConfig = CreationConfig;
+	FObjectThumbnail* Thumb = FThumbnailExporterRenderer::GenerateThumbnail(ModifiedCreationConfig, Asset.GetAsset(), CreationDelegate);
 	if (!Thumb)
 	{
 		return false;
 	}
 
-	UPackage* Package = GetAssetPackage(CreationConfig, ThumbnailPath);
+	FString AssetPath, AssetFilename;
+	if (!GetThumbnailAssetPathAndFilename(ModifiedCreationConfig, Asset, AssetPath, AssetFilename))
+	{
+		return false;
+	}
+	ThumbnailPath = AssetPath / AssetFilename;
+
+	UPackage* Package = GetAssetPackage(ModifiedCreationConfig, ThumbnailPath);
 	if (Package == nullptr)
 	{
 		return false;
@@ -238,7 +239,7 @@ bool FThumbnailExporterModule::ExportThumbnail(const FThumbnailCreationConfig& C
 	Mip->BulkData.Unlock();
 
 	NewTexture->Source.Init(Thumb->GetImageWidth(), Thumb->GetImageHeight(), 1, 1, ETextureSourceFormat::TSF_BGRA8, Thumb->GetUncompressedImageData().GetData());
-	NewTexture->LODGroup = CreationConfig.ThumbnailTextureGroup;
+	NewTexture->LODGroup = ModifiedCreationConfig.ThumbnailTextureGroup;
 	NewTexture->UpdateResource();
 	Package->MarkPackageDirty();
 	Package->FullyLoad();
@@ -251,7 +252,7 @@ bool FThumbnailExporterModule::ExportThumbnail(const FThumbnailCreationConfig& C
 	FString PackageFileName = FPackageName::LongPackageNameToFilename(ThumbnailPath, FPackageName::GetAssetPackageExtension());
 	UPackage::SavePackage(Package, NewTexture, *PackageFileName, SaveArgs);
 
-	if (CreationConfig.bCreateThumbnailNotification)
+	if (ModifiedCreationConfig.bCreateThumbnailNotification)
 	{
 		CreateThumbnailNotification(NewTexture);
 	}
