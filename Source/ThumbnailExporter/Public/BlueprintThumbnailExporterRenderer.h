@@ -26,6 +26,11 @@ struct FThumbnailCreationParams
 	FCanvas* Canvas;
 	bool bAdditionalViewFamily;
 	FPreCreateThumbnail CreationDelegate;
+
+	FVector2D GetThumbnailSize() const
+	{
+		return FVector2D(Width, Height);
+	}
 };
 
 UCLASS()

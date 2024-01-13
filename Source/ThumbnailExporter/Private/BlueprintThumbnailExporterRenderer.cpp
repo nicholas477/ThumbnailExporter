@@ -9,6 +9,8 @@
 #include "CanvasTypes.h"
 #include "EngineUtils.h"
 
+#include "CanvasItem.h"
+
 UBlueprintThumbnailExporterRenderer::UBlueprintThumbnailExporterRenderer(const FObjectInitializer& ObjectInitializer)
 	: Super(ObjectInitializer)
 {
@@ -18,6 +20,22 @@ UBlueprintThumbnailExporterRenderer::UBlueprintThumbnailExporterRenderer(const F
 UBlueprintThumbnailExporterRenderer::~UBlueprintThumbnailExporterRenderer()
 {
 
+}
+
+static ESimpleElementBlendMode GetMaterialBlendMode(const UMaterialInterface* Material)
+{
+	switch (Material->GetBlendMode())
+	{
+	case EBlendMode::BLEND_Additive:
+		return ESimpleElementBlendMode::SE_BLEND_Additive;
+
+	case EBlendMode::BLEND_Translucent:
+		return ESimpleElementBlendMode::SE_BLEND_Translucent;
+
+	default:
+	case EBlendMode::BLEND_Opaque:
+		return ESimpleElementBlendMode::SE_BLEND_Opaque;
+	}
 }
 
 void UBlueprintThumbnailExporterRenderer::DrawThumbnailWithConfig(FThumbnailCreationParams& CreationParams)
@@ -40,6 +58,18 @@ void UBlueprintThumbnailExporterRenderer::DrawThumbnailWithConfig(FThumbnailCrea
 
 		bCanRender = true;
 	}
+
+	//UMaterialInterface* Material = Cast<UMaterialInterface>(CreationParams.Object);
+	//if (IsValid(Material))
+	//{
+	//	Material->EnsureIsComplete();
+	//	
+	//	FCanvasTileItem TileItem(FVector2D(0, 0), Material->GetRenderProxy(), CreationParams.GetThumbnailSize());
+	//	TileItem.BlendMode = GetMaterialBlendMode(Material);
+	//	TileItem.SetColor(CreationParams.CreationConfig.ThumbnailBackground);
+	//	TileItem.Draw(CreationParams.Canvas);
+	//	return;
+	//}
 
 	UStaticMesh* StaticMesh = Cast<UStaticMesh>(CreationParams.Object);
 	if (IsValid(StaticMesh))
@@ -120,6 +150,11 @@ bool UBlueprintThumbnailExporterRenderer::CanVisualizeAsset(UObject* Object)
 	{
 		return true;
 	}
+
+	//if (Cast<UMaterialInterface>(Object))
+	//{
+	//	return true;
+	//}
 
 	return Super::CanVisualizeAsset(Object);
 }
