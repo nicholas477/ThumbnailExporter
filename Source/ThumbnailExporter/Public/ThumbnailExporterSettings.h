@@ -55,8 +55,14 @@ struct FThumbnailCreationConfig
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Config, Category = "Thumbnail|Scene")
 		bool bHideThumbnailBackgroundMeshes = true;
 
-	// Enable bloom in the thumbnail
+	// Enable post-processing (like bloom) in the thumbnail
+	// 
+	// If transparent backgrounds are not working, try toggling off post-processing
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Config, Category = "Thumbnail|Scene")
+		bool bEnablePostProcessing = true;
+
+	// Enable bloom in the thumbnail
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Config, Category = "Thumbnail|Scene", meta = (EditCondition = "bEnablePostProcessing"))
 		bool bEnableBloom = false;
 
 	// If true, then when the thumbnail texture is created, a notification will pop up with a link to the texture

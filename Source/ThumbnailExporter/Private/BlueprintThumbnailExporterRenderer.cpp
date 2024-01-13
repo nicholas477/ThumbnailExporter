@@ -71,6 +71,7 @@ void UBlueprintThumbnailExporterRenderer::DrawThumbnailWithConfig(FThumbnailCrea
 		ViewFamily.EngineShowFlags.Atmosphere = 0;
 		ViewFamily.EngineShowFlags.LOD = 0;
 		ViewFamily.EngineShowFlags.AntiAliasing = 0;
+		ViewFamily.EngineShowFlags.PostProcessing = CreationParams.CreationConfig.bEnablePostProcessing;
 		ViewFamily.EngineShowFlags.Bloom = CreationParams.CreationConfig.bEnableBloom;
 
 		ViewFamily.SceneCaptureSource = CreationParams.CreationConfig.ThumbnailCaptureSource;
