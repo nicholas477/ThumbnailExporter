@@ -13,5 +13,5 @@ class THUMBNAILEXPORTER_API FThumbnailExporterRenderer
 {
 public:
 	static FObjectThumbnail* GenerateThumbnail(FThumbnailCreationConfig& CreationConfig, UObject* InObject, const FPreCreateThumbnail& CreationDelegate = {});
-	static void RenderThumbnail(FThumbnailCreationConfig& CreationConfig, UObject* InObject, const uint32 InImageWidth, const uint32 InImageHeight, ThumbnailTools::EThumbnailTextureFlushMode::Type InFlushMode, FTextureRenderTargetResource* InRenderTargetResource = NULL, FObjectThumbnail* OutThumbnail = NULL, const FPreCreateThumbnail& CreationDelegate = {});
+	static void RenderThumbnail(FThumbnailCreationConfig& CreationConfig, UObject* InObject, const uint32 InImageWidth, const uint32 InImageHeight, ThumbnailTools::EThumbnailTextureFlushMode::Type InFlushMode, FObjectThumbnail* OutThumbnail = NULL, const FPreCreateThumbnail& CreationDelegate = {});
 };

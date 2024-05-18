@@ -39,6 +39,8 @@ public:
 	bool GetBackgroundMeshesHidden() const { return bHideBackgroundMeshes; }
 	TWeakObjectPtr<class AActor> GetPreviewActor() const { return PreviewActor; }
 
+	int32 NumTimesRendered;
+
 protected:
 	// FThumbnailPreviewScene implementation
 	virtual void GetViewMatrixParameters(const float InFOVDegrees, FVector& OutOrigin, float& OutOrbitPitch, float& OutOrbitYaw, float& OutOrbitZoom) const override;

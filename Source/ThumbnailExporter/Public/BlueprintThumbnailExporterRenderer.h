@@ -22,9 +22,10 @@ struct FThumbnailCreationParams
 	UObject* Object;
 	uint32 Width;
 	uint32 Height;
-	FRenderTarget* RenderTarget;
+	FRenderTarget* RenderTarget; // 
 	FCanvas* Canvas;
 	bool bAdditionalViewFamily;
+	bool bIsAlpha; // If true, then we are rendering out the alpha 
 	FPreCreateThumbnail CreationDelegate;
 
 	FVector2D GetThumbnailSize() const
@@ -46,6 +47,10 @@ public:
 	virtual bool CanVisualizeAsset(UObject* Object) override;
 
 	virtual void BeginDestroy() override;
+
+	static void RenderViewFamily(FCanvas* Canvas, class FSceneViewFamily* ViewFamily, class FSceneView* View);
+
+	virtual EThumbnailRenderFrequency GetThumbnailRenderFrequency(UObject* Object) const override { return EThumbnailRenderFrequency::Once; }
 
 protected:
 	FThumbnailExporterScene& GetThumbnailScene(const FThumbnailCreationConfig& CreationConfig);

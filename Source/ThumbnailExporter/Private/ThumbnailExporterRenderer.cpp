@@ -41,7 +41,7 @@ FObjectThumbnail* FThumbnailExporterRenderer::GenerateThumbnail(FThumbnailCreati
 {
 	// Does the object support thumbnails?
 	FThumbnailRenderingInfo* RenderInfo = GUnrealEd ? GUnrealEd->GetThumbnailManager()->GetRenderingInfo(UThumbnailExporterThumbnailDummy::StaticClass()->ClassDefaultObject) : nullptr;
-	if (RenderInfo != NULL && RenderInfo->Renderer != NULL)
+	if (RenderInfo != NULL && RenderInfo->Renderer != nullptr)
 	{
 		// Set the size of cached thumbnails
 		const int32 ImageWidth = CreationConfig.ThumbnailSize;
@@ -55,7 +55,7 @@ FObjectThumbnail* FThumbnailExporterRenderer::GenerateThumbnail(FThumbnailCreati
 		// Generate the thumbnail
 		FObjectThumbnail NewThumbnail;
 		FThumbnailExporterRenderer::RenderThumbnail(
-			CreationConfig, InObject, ImageWidth, ImageHeight, TextureFlushMode, NULL,
+			CreationConfig, InObject, ImageWidth, ImageHeight, TextureFlushMode,
 			&NewThumbnail, CreationDelegate);
 
 		UPackage* MyOutermostPackage = InObject->GetOutermost();
@@ -65,7 +65,42 @@ FObjectThumbnail* FThumbnailExporterRenderer::GenerateThumbnail(FThumbnailCreati
 	return NULL;
 }
 
-void FThumbnailExporterRenderer::RenderThumbnail(FThumbnailCreationConfig& CreationConfig, UObject* InObject, const uint32 InImageWidth, const uint32 InImageHeight, ThumbnailTools::EThumbnailTextureFlushMode::Type InFlushMode, FTextureRenderTargetResource* InTextureRenderTargetResource, FObjectThumbnail* OutThumbnail, const FPreCreateThumbnail& CreationDelegate)
+struct FThumbnailRenderTargetResource
+{
+	UTextureRenderTarget2D* RenderTargetTexture;
+	FTextureRenderTargetResource* RenderTargetResource;
+	FCanvas Canvas;
+};
+
+static FThumbnailRenderTargetResource CreateThumbnailRenderTarget(uint32 InImageWidth, uint32 InImageHeight, FLinearColor ClearColor)
+{
+	const uint32 MinRenderTargetSize = FMath::Max(InImageWidth, InImageHeight);
+	UTextureRenderTarget2D* RenderTargetTexture = NewObject<UTextureRenderTarget2D>(GetTransientPackage(), NAME_None, RF_Transient);
+	check(RenderTargetTexture != NULL);
+
+	RenderTargetTexture->TargetGamma = GEngine->DisplayGamma;
+	RenderTargetTexture->RenderTargetFormat = RTF_RGBA8;
+	RenderTargetTexture->ClearColor = ClearColor;
+	RenderTargetTexture->InitAutoFormat(InImageWidth, InImageHeight);
+	RenderTargetTexture->UpdateResourceImmediate(true);
+
+	// Make sure the input dimensions are OK.  The requested dimensions must be less than or equal to
+	// our scratch render target size.
+	check(InImageWidth <= RenderTargetTexture->GetSurfaceWidth());
+	check(InImageHeight <= RenderTargetTexture->GetSurfaceHeight());
+
+	FTextureRenderTargetResource* RenderTargetResource = RenderTargetTexture->GameThread_GetRenderTargetResource();
+	check(RenderTargetResource != NULL);
+
+	// Create a canvas for the render target and clear it
+	FCanvas Canvas(RenderTargetResource, NULL, FGameTime::GetTimeSinceAppStart(), GMaxRHIFeatureLevel);
+	Canvas.Clear(ClearColor);
+
+	return FThumbnailRenderTargetResource{ RenderTargetTexture, RenderTargetResource, MoveTemp(Canvas)};
+}
+
+void FThumbnailExporterRenderer::RenderThumbnail(FThumbnailCreationConfig& CreationConfig, UObject* InObject, 
+	const uint32 InImageWidth, const uint32 InImageHeight, ThumbnailTools::EThumbnailTextureFlushMode::Type InFlushMode, FObjectThumbnail* OutThumbnail, const FPreCreateThumbnail& CreationDelegate)
 {
 	if (!FApp::CanEverRender())
 	{
@@ -83,32 +118,8 @@ void FThumbnailExporterRenderer::RenderThumbnail(FThumbnailCreationConfig& Creat
 		OutThumbnail->SetImageSize(InImageWidth, InImageHeight);
 	}
 
-	// Grab the actual render target resource from the texture.  Note that we're absolutely NOT ALLOWED to
-	// dereference this pointer.  We're just passing it along to other functions that will use it on the render
-	// thread.  The only thing we're allowed to do is check to see if it's NULL or not.
-	FTextureRenderTargetResource* RenderTargetResource = InTextureRenderTargetResource;
-	if (RenderTargetResource == NULL)
-	{
-		// No render target was supplied, just use a scratch texture render target
-		const uint32 MinRenderTargetSize = FMath::Max(InImageWidth, InImageHeight);
-		UTextureRenderTarget2D* RenderTargetTexture = GEditor->GetScratchRenderTarget(MinRenderTargetSize);
-		check(RenderTargetTexture != NULL);
-		RenderTargetTexture->ClearColor = CreationConfig.GetAdjustedBackgroundColor();
-		RenderTargetTexture->InitAutoFormat(RenderTargetTexture->GetSurfaceWidth(), RenderTargetTexture->GetSurfaceHeight());
-		RenderTargetTexture->UpdateResourceImmediate(true);
-
-		// Make sure the input dimensions are OK.  The requested dimensions must be less than or equal to
-		// our scratch render target size.
-		check(InImageWidth <= RenderTargetTexture->GetSurfaceWidth());
-		check(InImageHeight <= RenderTargetTexture->GetSurfaceHeight());
-
-		RenderTargetResource = RenderTargetTexture->GameThread_GetRenderTargetResource();
-	}
-	check(RenderTargetResource != NULL);
-
-	// Create a canvas for the render target and clear it
-	FCanvas Canvas(RenderTargetResource, NULL, FGameTime::GetTimeSinceAppStart(), GMaxRHIFeatureLevel);
-	Canvas.Clear(CreationConfig.GetAdjustedBackgroundColor());
+	FThumbnailRenderTargetResource LDRThumbnail = CreateThumbnailRenderTarget(InImageWidth, InImageHeight, CreationConfig.GetAdjustedBackgroundColor());
+	FThumbnailRenderTargetResource AlphaThumbnail = CreateThumbnailRenderTarget(InImageWidth, InImageHeight, CreationConfig.GetAdjustedBackgroundColor());
 
 	// Get the rendering info for this object
 	FThumbnailRenderingInfo* RenderInfo = GUnrealEd ? GUnrealEd->GetThumbnailManager()->GetRenderingInfo(UThumbnailExporterThumbnailDummy::StaticClass()->ClassDefaultObject) : nullptr;
@@ -144,27 +155,51 @@ void FThumbnailExporterRenderer::RenderThumbnail(FThumbnailCreationConfig& Creat
 		UBlueprintThumbnailExporterRenderer* OurThumbnailRenderer = Cast<UBlueprintThumbnailExporterRenderer>(RenderInfo->Renderer);
 		check(OurThumbnailRenderer != nullptr);
 
-		FThumbnailCreationParams CreationParams(CreationConfig);
-		CreationParams.Object = InObject;
-		CreationParams.Width = InImageWidth;
-		CreationParams.Height = InImageHeight;
-		CreationParams.RenderTarget = RenderTargetResource;
-		CreationParams.Canvas = &Canvas;
-		CreationParams.bAdditionalViewFamily = bAdditionalViewFamily;
-		CreationParams.CreationDelegate = CreationDelegate;
 
-		OurThumbnailRenderer->DrawThumbnailWithConfig(CreationParams);
+		{
+			// Draw the LDR/final color thumbnail
+			FThumbnailCreationParams CreationParams(CreationConfig);
+			CreationParams.Object = InObject;
+			CreationParams.Width = InImageWidth;
+			CreationParams.Height = InImageHeight;
+			CreationParams.bIsAlpha = false;
+			CreationParams.RenderTarget = LDRThumbnail.RenderTargetResource;
+			CreationParams.Canvas = &LDRThumbnail.Canvas;
+			CreationParams.bAdditionalViewFamily = bAdditionalViewFamily;
+			CreationParams.CreationDelegate = CreationDelegate;
+
+			OurThumbnailRenderer->DrawThumbnailWithConfig(CreationParams);
+		}
+
+		{
+			// Draw the alpha
+			FThumbnailCreationParams CreationParams(CreationConfig);
+			CreationParams.Object = InObject;
+			CreationParams.Width = InImageWidth;
+			CreationParams.Height = InImageHeight;
+			CreationParams.bIsAlpha = true;
+			CreationParams.RenderTarget = AlphaThumbnail.RenderTargetResource;
+			CreationParams.Canvas = &AlphaThumbnail.Canvas;
+			CreationParams.bAdditionalViewFamily = bAdditionalViewFamily;
+			CreationParams.CreationDelegate = CreationDelegate;
+
+			OurThumbnailRenderer->DrawThumbnailWithConfig(CreationParams);
+		}
 	}
 
 	// Tell the rendering thread to draw any remaining batched elements
-	Canvas.Flush_GameThread();
+	LDRThumbnail.Canvas.Flush_GameThread();
+	AlphaThumbnail.Canvas.Flush_GameThread();
 
 	ENQUEUE_RENDER_COMMAND(UpdateThumbnailRTCommand)(
-		[RenderTargetResource](FRHICommandListImmediate& RHICmdList)
+		[LDRRenderTargetResource = LDRThumbnail.RenderTargetResource, AlphaRenderTargetResource = AlphaThumbnail.RenderTargetResource](FRHICommandListImmediate& RHICmdList)
 		{
-			TransitionAndCopyTexture(RHICmdList, RenderTargetResource->GetRenderTargetTexture(), RenderTargetResource->TextureRHI, {});
+			TransitionAndCopyTexture(RHICmdList, LDRRenderTargetResource->GetRenderTargetTexture(), LDRRenderTargetResource->TextureRHI, {});
+			TransitionAndCopyTexture(RHICmdList, AlphaRenderTargetResource->GetRenderTargetTexture(), AlphaRenderTargetResource->TextureRHI, {});
 		}
 	);
+
+	FlushRenderingCommands();
 
 	if (OutThumbnail)
 	{
@@ -175,15 +210,29 @@ void FThumbnailExporterRenderer::RenderThumbnail(FThumbnailCreationConfig& Creat
 		OutData.Empty();
 		OutData.AddUninitialized(OutThumbnail->GetImageWidth() * OutThumbnail->GetImageHeight() * sizeof(FColor));
 
-		// Copy the contents of the remote texture to system memory
-		// NOTE: OutRawImageData must be a preallocated buffer!
-		RenderTargetResource->ReadPixelsPtr((FColor*)OutData.GetData(), FReadSurfaceDataFlags(), InSrcRect);
+		// Copy the contents of the LDR color to the thumbnail
+		// NOTE: OutData must be a preallocated buffer!
+		LDRThumbnail.RenderTargetResource->ReadPixelsPtr((FColor*)OutData.GetData(), FReadSurfaceDataFlags(), InSrcRect);
 
+		TArray<uint8> AlphaData;
+		AlphaData.AddUninitialized(OutThumbnail->GetImageWidth() * OutThumbnail->GetImageHeight() * sizeof(FColor));
+
+		AlphaThumbnail.RenderTargetResource->ReadPixelsPtr((FColor*)AlphaData.GetData(), FReadSurfaceDataFlags(), InSrcRect);
+
+		FColor* Color = (FColor*)OutData.GetData();
+		FColor* Alpha = (FColor*)AlphaData.GetData();
 		if (CreationConfig.InvertBackgroundAlpha())
 		{
-			for (FColor* Color = (FColor*)OutData.GetData(); Color < (FColor*)(OutData.GetData() + OutData.Num()); ++Color)
+			for (; Color < (FColor*)(OutData.GetData() + OutData.Num()); ++Color, ++Alpha)
 			{
-				Color->A = 255 - Color->A;
+				Color->A = 255 - Alpha->A;
+			}
+		}
+		else
+		{
+			for (; Color < (FColor*)(OutData.GetData() + OutData.Num()); ++Color, ++Alpha)
+			{
+				Color->A = Alpha->A;
 			}
 		}
 	}

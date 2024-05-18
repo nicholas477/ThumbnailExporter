@@ -7,6 +7,7 @@
 #include "EngineUtils.h"
 #include "ThumbnailRendering/SceneThumbnailInfo.h"
 #include "Engine/StaticMeshActor.h"
+#include "Components/SkyLightComponent.h"
 
 static USkeletalMesh* GetSkeletalMesh(USkeletalMeshComponent* SkelMeshComp)
 {
@@ -21,10 +22,19 @@ FThumbnailExporterScene::FThumbnailExporterScene(bool bInHideBackgroundMeshes)
 	: FThumbnailPreviewScene()
 	, bHideBackgroundMeshes(bInHideBackgroundMeshes)
 	, NumStartingActors(0)
+	, NumTimesRendered(0)
 	, PreviewActor(nullptr)
 	, CurrentBlueprint(nullptr)
 {
 	NumStartingActors = GetWorld()->GetCurrentLevel()->Actors.Num();
+
+	if (SkyLight)
+	{
+		//SkyLight->Set
+		//UE_LOG(LogTemp, Warning, TEXT("asdf"));
+		//SkyLight->RecaptureSky();
+		//USkyLightComponent::UpdateSkyCaptureContents(SkyLight->GetWorld());
+	}
 
 	// Iterate over all of the objects inside the scene and hide them
 	const UWorld* MyWorld = GetWorld();

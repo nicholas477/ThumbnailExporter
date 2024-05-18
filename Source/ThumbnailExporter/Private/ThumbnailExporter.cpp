@@ -201,11 +201,6 @@ static UPackage* GetAssetPackage(const FThumbnailCreationConfig& CreationConfig,
 bool FThumbnailExporterModule::ExportThumbnail(const FThumbnailCreationConfig& CreationConfig, const FAssetData& Asset, FString& ThumbnailPath, const FPreCreateThumbnail& CreationDelegate)
 {
 	FThumbnailCreationConfig ModifiedCreationConfig = CreationConfig;
-	FObjectThumbnail* Thumb = FThumbnailExporterRenderer::GenerateThumbnail(ModifiedCreationConfig, Asset.GetAsset(), CreationDelegate);
-	if (!Thumb)
-	{
-		return false;
-	}
 
 	FString AssetPath, AssetFilename;
 	if (!GetThumbnailAssetPathAndFilename(ModifiedCreationConfig, Asset, AssetPath, AssetFilename))
@@ -216,6 +211,12 @@ bool FThumbnailExporterModule::ExportThumbnail(const FThumbnailCreationConfig& C
 
 	UPackage* Package = GetAssetPackage(ModifiedCreationConfig, ThumbnailPath);
 	if (Package == nullptr)
+	{
+		return false;
+	}
+
+	FObjectThumbnail* Thumb = FThumbnailExporterRenderer::GenerateThumbnail(ModifiedCreationConfig, Asset.GetAsset(), CreationDelegate);
+	if (!Thumb)
 	{
 		return false;
 	}
