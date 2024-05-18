@@ -50,7 +50,9 @@ public:
 
 	static void RenderViewFamily(FCanvas* Canvas, class FSceneViewFamily* ViewFamily, class FSceneView* View);
 
+#if ENGINE_MINOR_VERSION >= 4
 	virtual EThumbnailRenderFrequency GetThumbnailRenderFrequency(UObject* Object) const override { return EThumbnailRenderFrequency::Once; }
+#endif
 
 protected:
 	FThumbnailExporterScene& GetThumbnailScene(const FThumbnailCreationConfig& CreationConfig);
