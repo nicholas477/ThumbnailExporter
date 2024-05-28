@@ -22,7 +22,6 @@ FThumbnailExporterScene::FThumbnailExporterScene(bool bInHideBackgroundMeshes)
 	: FThumbnailPreviewScene()
 	, bHideBackgroundMeshes(bInHideBackgroundMeshes)
 	, NumStartingActors(0)
-	, NumTimesRendered(0)
 	, PreviewActor(nullptr)
 	, CurrentBlueprint(nullptr)
 {

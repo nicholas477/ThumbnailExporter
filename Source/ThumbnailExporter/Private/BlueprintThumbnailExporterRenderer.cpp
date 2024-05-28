@@ -167,15 +167,6 @@ void UBlueprintThumbnailExporterRenderer::DrawThumbnailWithConfig(FThumbnailCrea
 		}
 
 		RenderViewFamily(CreationParams.Canvas, &ViewFamily, View);
-		ThumbnailScene->NumTimesRendered++;
-
-		//if (ThumbnailScene->NumTimesRendered == 1)
-		//{
-		//	FlushRenderingCommands();
-
-		//	RenderViewFamily(CreationParams.Canvas, &ViewFamily, View);
-		//	ThumbnailScene->NumTimesRendered++;
-		//}
 
 		// If we used a creation delegate, then delete the scene.
 		// The scene can be messed up by the creation delegate, so its better to just recreate it
