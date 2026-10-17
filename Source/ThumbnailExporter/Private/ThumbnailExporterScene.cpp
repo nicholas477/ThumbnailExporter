@@ -8,6 +8,7 @@
 #include "ThumbnailRendering/SceneThumbnailInfo.h"
 #include "Engine/StaticMeshActor.h"
 #include "Components/SkyLightComponent.h"
+#include "RenderingThread.h"
 
 static USkeletalMesh* GetSkeletalMesh(USkeletalMeshComponent* SkelMeshComp)
 {
@@ -21,19 +22,12 @@ static USkeletalMesh* GetSkeletalMesh(USkeletalMeshComponent* SkelMeshComp)
 FThumbnailExporterScene::FThumbnailExporterScene(bool bInHideBackgroundMeshes)
 	: FThumbnailPreviewScene()
 	, bHideBackgroundMeshes(bInHideBackgroundMeshes)
+	, bSkyLightCapturePending(true)
 	, NumStartingActors(0)
 	, PreviewActor(nullptr)
 	, CurrentBlueprint(nullptr)
 {
 	NumStartingActors = GetWorld()->GetCurrentLevel()->Actors.Num();
-
-	if (SkyLight)
-	{
-		//SkyLight->Set
-		//UE_LOG(LogTemp, Warning, TEXT("asdf"));
-		//SkyLight->RecaptureSky();
-		//USkyLightComponent::UpdateSkyCaptureContents(SkyLight->GetWorld());
-	}
 
 	// Iterate over all of the objects inside the scene and hide them
 	const UWorld* MyWorld = GetWorld();
@@ -62,15 +56,19 @@ FThumbnailExporterScene::FThumbnailExporterScene(bool bInHideBackgroundMeshes)
 
 FSceneView* FThumbnailExporterScene::CreateView(FSceneViewFamily* ViewFamily, int32 X, int32 Y, uint32 SizeX, uint32 SizeY) const
 {
+	EnsureSkyLightIsReady();
+
 	FSceneView* View = FThumbnailPreviewScene::CreateView(ViewFamily, X, Y, SizeX, SizeY);
 
 	View->bIsSceneCapture = true;
 
 	const float FOVDegrees = 30.f;
+	const float HalfFOVRadians = FMath::DegreesToRadians(FOVDegrees) * 0.5f;
+	const float FOVScreenSize = SizeX / FMath::Tan(HalfFOVRadians);
 
 	for (TActorIterator<AActor> It(GetWorld()); It; ++It)
 	{
-		IStreamingManager::Get().AddViewInformation(View->ViewMatrices.GetViewOrigin(), SizeX, SizeX / FMath::Tan(FOVDegrees), 10.f, false, 5.f, *It);
+		IStreamingManager::Get().AddViewInformation(View->ViewMatrices.GetViewOrigin(), SizeX, FOVScreenSize, 10.f, false, 5.f, *It);
 	}
 	IStreamingManager::Get().StreamAllResources();
 
@@ -181,6 +179,25 @@ void FThumbnailExporterScene::SetOverrideMaterials(const TArray<class UMaterialI
 	}
 }
 
+void FThumbnailExporterScene::EnsureSkyLightIsReady() const
+{
+	if (!bSkyLightCapturePending)
+	{
+		return;
+	}
+
+	if (SkyLight)
+	{
+		SkyLight->MarkRenderStateDirty();
+		SkyLight->RecaptureSky();
+	}
+
+	const_cast<FThumbnailExporterScene*>(this)->UpdateCaptureContents();
+	FlushRenderingCommands();
+
+	bSkyLightCapturePending = false;
+}
+
 void FThumbnailExporterScene::GetViewMatrixParameters(const float InFOVDegrees, FVector& OutOrigin, float& OutOrbitPitch, float& OutOrbitYaw, float& OutOrbitZoom) const
 {
 	if (AStaticMeshActor* StaticMeshPreview = Cast<AStaticMeshActor>(PreviewActor))
@@ -191,7 +208,7 @@ void FThumbnailExporterScene::GetViewMatrixParameters(const float InFOVDegrees, 
 		const float BoundsZOffset = GetBoundsZOffset(StaticMeshPreview->GetStaticMeshComponent()->Bounds);
 		const float TargetDistance = HalfMeshSize / FMath::Tan(HalfFOVRadians);
 
-		USceneThumbnailInfo* ThumbnailInfo = Cast<USceneThumbnailInfo>(StaticMeshPreview->GetStaticMeshComponent()->GetStaticMesh()->ThumbnailInfo);
+		USceneThumbnailInfo* ThumbnailInfo = Cast<USceneThumbnailInfo>(StaticMeshPreview->GetStaticMeshComponent()->GetStaticMesh()->GetThumbnailInfo());
 		if (ThumbnailInfo)
 		{
 			if (TargetDistance + ThumbnailInfo->OrbitZoom < 0)

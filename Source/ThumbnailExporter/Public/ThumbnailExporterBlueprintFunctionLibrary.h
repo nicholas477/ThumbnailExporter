@@ -22,7 +22,7 @@ class THUMBNAILEXPORTER_API UThumbnailExporterBlueprintFunctionLibrary : public 
 	
 	// Exports the thumbnail to a separate texture, optionally creates a notification saying the texture was created
 	// Returns true if the creation was succesful
-	UFUNCTION(BlueprintCallable, Category = "Thumbnail Exporter", meta=(AutoCreateRefTerm="CreationDelegate"))
+	UFUNCTION(BlueprintCallable, Category = "Thumbnail Exporter", meta=(AutoCreateRefTerm="CreationDelegate", DeprecatedFunction, DeprecationMessage="Use Export Thumbnail Async so Nanite GPU streaming can update between frames."))
 		static bool ExportThumbnail(const FThumbnailCreationConfig& CreationConfig, const FAssetData& Asset, FString& ThumbnailPath, const FPreCreateThumbnail& CreationDelegate);
 	
 	// Returns true if a thumbnail can be created for the asset

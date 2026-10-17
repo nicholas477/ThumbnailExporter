@@ -51,6 +51,12 @@ struct FThumbnailCreationConfig
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Config, Category = "Thumbnail|Texture")
 		TEnumAsByte<TextureGroup> ThumbnailTextureGroup = TextureGroup::TEXTUREGROUP_UI;
 
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Config, Category = "Thumbnail|Texture")
+		TEnumAsByte<TextureMipGenSettings> MipMapSettings = TextureMipGenSettings::TMGS_FromTextureGroup;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Config, Category = "Thumbnail|Texture", meta = (ClampMin = "0.0"))
+		int32 MaxTextureSize = 0;
+
 	// Hide the background meshes present in the asset thumbnail. Hides the checkerboard background
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Config, Category = "Thumbnail|Scene")
 		bool bHideThumbnailBackgroundMeshes = true;

@@ -51,10 +51,13 @@ protected:
 
 	FBoxSphereBounds GetPreviewActorBounds() const;
 
+	void EnsureSkyLightIsReady() const;
+
 	/** Clears out any stale actors in this scene if PreviewActor enters a stale state */
 	void ClearStaleActors();
 
 	bool bHideBackgroundMeshes;
+	mutable bool bSkyLightCapturePending;
 
 	int32 NumStartingActors;
 	TWeakObjectPtr<class AActor> PreviewActor;

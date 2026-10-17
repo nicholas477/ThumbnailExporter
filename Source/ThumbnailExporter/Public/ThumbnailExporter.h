@@ -3,11 +3,14 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "Containers/Ticker.h"
 #include "Modules/ModuleManager.h"
 #include "ThumbnailExporterBlueprintFunctionLibrary.h"
 
 struct FAssetData;
 struct FThumbnailCreationConfig;
+
+DECLARE_DELEGATE_TwoParams(FOnThumbnailExportCompleted, bool, const FString&);
 
 class FThumbnailExporterModule : public IModuleInterface
 {
@@ -20,6 +23,7 @@ public:
 	// Exports the thumbnail to a separate texture, optionally creates a notification saying the texture was created
 	// Returns true if the creation was succesful
 	static bool ExportThumbnail(const FThumbnailCreationConfig& CreationConfig, const FAssetData& Asset, FString& ThumbnailPath, const FPreCreateThumbnail& CreationDelegate = {});
+	void ExportThumbnailAsync(const FThumbnailCreationConfig& CreationConfig, const FAssetData& Asset, FOnThumbnailExportCompleted Completion, const FPreCreateThumbnail& CreationDelegate = {});
 
 	// Returns true if a thumbnail can be created for the asset(s)
 	static bool CanCreateThumbnail(const TArray<FAssetData>& Assets);
@@ -30,6 +34,7 @@ public:
 
 protected:
 	FDelegateHandle ContentBrowserExtenderDelegateHandle;
+	TArray<FTSTicker::FDelegateHandle> AsyncExportTickerHandles;
 
 	void AddContentBrowserContextMenuExtender();
 	void RemoveContentBrowserContextMenuExtender() const;

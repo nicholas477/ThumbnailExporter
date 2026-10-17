@@ -7,17 +7,16 @@
 #include "ThumbnailExporterThumbnailDummy.h"
 #include "ThumbnailExporterScene.h"
 #include "CanvasTypes.h"
-#include "EngineUtils.h"
 
 #include "RendererInterface.h"
 #include "EngineModule.h"
 #include "SceneView.h"
 #include "SceneViewExtension.h"
 #include "LegacyScreenPercentageDriver.h"
-#include "RenderingThread.h"
 #include "RenderGraphBuilder.h"
 
 #include "CanvasItem.h"
+#include "Engine/StaticMesh.h"
 
 UBlueprintThumbnailExporterRenderer::UBlueprintThumbnailExporterRenderer(const FObjectInitializer& ObjectInitializer)
 	: Super(ObjectInitializer)
@@ -51,7 +50,20 @@ void UBlueprintThumbnailExporterRenderer::DrawThumbnailWithConfig(FThumbnailCrea
 	bool bCanRender = false;
 	UBlueprint* Blueprint = Cast<UBlueprint>(CreationParams.Object);
 
-	FThumbnailExporterScene* ThumbnailScene = &GetThumbnailScene(CreationParams.CreationConfig);
+	FThumbnailExporterScene* ThisThumbnailScene = &GetThumbnailScene(CreationParams.CreationConfig);
+
+	auto DestroyThumbnailScene = [this, ThisThumbnailScene]()
+	{
+		for (int32 SceneIndex = 0; SceneIndex < ThumbnailScenes.Num(); ++SceneIndex)
+		{
+			if (ThumbnailScenes[SceneIndex] == ThisThumbnailScene)
+			{
+				delete ThisThumbnailScene;
+				ThumbnailScenes.RemoveAtSwap(SceneIndex);
+				return;
+			}
+		}
+	};
 
 	// Strict validation - it may hopefully fix UE-35705.
 	const bool bIsBlueprintValid = IsValid(Blueprint)
@@ -62,127 +74,111 @@ void UBlueprintThumbnailExporterRenderer::DrawThumbnailWithConfig(FThumbnailCrea
 		&& !Blueprint->HasAnyFlags(RF_Transient);
 	if (bIsBlueprintValid)
 	{
-		ThumbnailScene->SetBlueprint(Blueprint);
-
+		ThisThumbnailScene->SetBlueprint(Blueprint);
 		bCanRender = true;
 	}
-
-	//UMaterialInterface* Material = Cast<UMaterialInterface>(CreationParams.Object);
-	//if (IsValid(Material))
-	//{
-	//	Material->EnsureIsComplete();
-	//	
-	//	FCanvasTileItem TileItem(FVector2D(0, 0), Material->GetRenderProxy(), CreationParams.GetThumbnailSize());
-	//	TileItem.BlendMode = GetMaterialBlendMode(Material);
-	//	TileItem.SetColor(CreationParams.CreationConfig.ThumbnailBackground);
-	//	TileItem.Draw(CreationParams.Canvas);
-	//	return;
-	//}
 
 	UStaticMesh* StaticMesh = Cast<UStaticMesh>(CreationParams.Object);
 	if (IsValid(StaticMesh))
 	{
-		ThumbnailScene->SetStaticMesh(StaticMesh);
-		ThumbnailScene->GetScene()->UpdateSpeedTreeWind(0.0);
-
+		ThisThumbnailScene->SetStaticMesh(StaticMesh);
+		ThisThumbnailScene->GetScene()->UpdateSpeedTreeWind(0.0);
 		bCanRender = true;
 	}
 
 	USkeletalMesh* SkeletalMesh = Cast<USkeletalMesh>(CreationParams.Object);
 	if (IsValid(SkeletalMesh))
 	{
-		ThumbnailScene->SetSkeletalMesh(SkeletalMesh);
+		ThisThumbnailScene->SetSkeletalMesh(SkeletalMesh);
 		bCanRender = true;
 	}
 
 	if (bCanRender)
 	{
-		FSceneViewFamilyContext ViewFamily(FSceneViewFamily::ConstructionValues(CreationParams.RenderTarget, ThumbnailScene->GetScene(), FEngineShowFlags(ESFIM_Game))
-			.SetTime(UThumbnailRenderer::GetTime())
-			.SetDeferClear(true)
-			.SetResolveScene(false)
-			.SetAdditionalViewFamily(CreationParams.bAdditionalViewFamily));
-
-		ViewFamily.bThumbnailRendering = true;
-
-		if (CreationParams.bIsAlpha)
+		auto RenderSinglePass = [&](const bool bApplyCreationDelegate)
 		{
-			ViewFamily.EngineShowFlags.DisableAdvancedFeatures();
-			ViewFamily.EngineShowFlags.SetScreenPercentage(false);
-			ViewFamily.EngineShowFlags.MotionBlur = 0;
-			ViewFamily.EngineShowFlags.Fog = 0;
-			ViewFamily.EngineShowFlags.DepthOfField = 0;
-			ViewFamily.EngineShowFlags.LocalExposure = 0;
-			ViewFamily.EngineShowFlags.Vignette = 0;
-			ViewFamily.EngineShowFlags.Grain = 0;
-			ViewFamily.EngineShowFlags.Atmosphere = 0;
-			ViewFamily.EngineShowFlags.LOD = 0;
-			ViewFamily.EngineShowFlags.AntiAliasing = 0;
-			ViewFamily.EngineShowFlags.PostProcessMaterial = 0;
-			ViewFamily.EngineShowFlags.Tonemapper = 1;
-			ViewFamily.EngineShowFlags.ColorGrading = 1;
-			ViewFamily.EngineShowFlags.IndirectLightingCache = 0;
-			ViewFamily.EngineShowFlags.PostProcessing = false;
-			ViewFamily.EngineShowFlags.Bloom = false;
-			ViewFamily.bIsHDR = false;
+			FSceneViewFamilyContext ViewFamily(FSceneViewFamily::ConstructionValues(CreationParams.RenderTarget, ThisThumbnailScene->GetScene(), FEngineShowFlags(ESFIM_Game))
+				.SetTime(UThumbnailRenderer::GetTime())
+				.SetDeferClear(true)
+				.SetResolveScene(false)
+				.SetAdditionalViewFamily(CreationParams.bAdditionalViewFamily));
 
-			ViewFamily.SceneCaptureSource = ESceneCaptureSource::SCS_SceneColorHDR;
-			ViewFamily.SceneCaptureCompositeMode = ESceneCaptureCompositeMode::SCCM_Composite;
-		}
-		else
-		{
-			ViewFamily.EngineShowFlags.DisableAdvancedFeatures();
-			ViewFamily.EngineShowFlags.MotionBlur = 0;
+			ViewFamily.bThumbnailRendering = true;
 
-			// Resolve scene is needed for LDR rendering, no idea why
-			ViewFamily.bResolveScene = true;
-
-			ViewFamily.EngineShowFlags.SetScreenPercentage(false);
-			ViewFamily.EngineShowFlags.Fog = 0;
-			ViewFamily.EngineShowFlags.DepthOfField = 0;
-			ViewFamily.EngineShowFlags.LocalExposure = 0;
-			ViewFamily.EngineShowFlags.Vignette = 0;
-			ViewFamily.EngineShowFlags.Grain = 0;
-			ViewFamily.EngineShowFlags.Atmosphere = 0;
-			ViewFamily.EngineShowFlags.LOD = 0;
-			ViewFamily.EngineShowFlags.AntiAliasing = 0;
-			ViewFamily.EngineShowFlags.PostProcessMaterial = 0;
-			//ViewFamily.EngineShowFlags.Tonemapper = 1;
-			//ViewFamily.EngineShowFlags.ColorGrading = 1;
-			//ViewFamily.EngineShowFlags.IndirectLightingCache = 0;
-			ViewFamily.EngineShowFlags.PostProcessing = CreationParams.CreationConfig.bEnablePostProcessing;
-			ViewFamily.EngineShowFlags.Bloom = CreationParams.CreationConfig.bEnableBloom;
-			//ViewFamily.bIsHDR = false;
-
-			ViewFamily.SceneCaptureSource = ESceneCaptureSource::SCS_FinalColorLDR;
-			ViewFamily.SceneCaptureCompositeMode = ESceneCaptureCompositeMode::SCCM_Overwrite;
-		}
-
-		FSceneView* View = ThumbnailScene->CreateView(&ViewFamily, 0, 0, CreationParams.Width, CreationParams.Height);
-		View->BackgroundColor = CreationParams.CreationConfig.GetAdjustedBackgroundColor();
-
-		if (CreationParams.CreationDelegate.IsBound())
-		{
-			CreationParams.CreationConfig = CreationParams.CreationDelegate.Execute(CreationParams.CreationConfig, ThumbnailScene->GetPreviewActor().Get());
-		}
-
-		RenderViewFamily(CreationParams.Canvas, &ViewFamily, View);
-
-		// If we used a creation delegate, then delete the scene.
-		// The scene can be messed up by the creation delegate, so its better to just recreate it
-		if (CreationParams.CreationDelegate.IsBound())
-		{
-			for (FThumbnailExporterScene* DestroyThumbnailScene : ThumbnailScenes)
+			if (CreationParams.bIsAlpha)
 			{
-				if (DestroyThumbnailScene == ThumbnailScene)
-				{
-					delete DestroyThumbnailScene;
-					ThumbnailScenes.Remove(ThumbnailScene);
-					break;
-				}
+				ViewFamily.EngineShowFlags.DisableAdvancedFeatures();
+				ViewFamily.EngineShowFlags.SetScreenPercentage(false);
+				ViewFamily.EngineShowFlags.MotionBlur = 0;
+				ViewFamily.EngineShowFlags.Fog = 0;
+				ViewFamily.EngineShowFlags.DepthOfField = 0;
+				ViewFamily.EngineShowFlags.LocalExposure = 0;
+				ViewFamily.EngineShowFlags.EyeAdaptation = 0;
+				ViewFamily.EngineShowFlags.Vignette = 0;
+				ViewFamily.EngineShowFlags.Grain = 0;
+				ViewFamily.EngineShowFlags.Atmosphere = 0;
+				ViewFamily.EngineShowFlags.LOD = 0;
+				ViewFamily.EngineShowFlags.NaniteMeshes = 1;
+				ViewFamily.EngineShowFlags.NaniteStreamingGeometry = 1;
+				ViewFamily.EngineShowFlags.AntiAliasing = 0;
+				ViewFamily.EngineShowFlags.PostProcessMaterial = 0;
+				ViewFamily.EngineShowFlags.Tonemapper = 1;
+				ViewFamily.EngineShowFlags.ColorGrading = 1;
+				ViewFamily.EngineShowFlags.IndirectLightingCache = 0;
+				ViewFamily.EngineShowFlags.PostProcessing = false;
+				ViewFamily.EngineShowFlags.Bloom = false;
+				ViewFamily.bIsHDR = false;
+
+				ViewFamily.SceneCaptureSource = ESceneCaptureSource::SCS_SceneColorHDR;
+				ViewFamily.SceneCaptureCompositeMode = ESceneCaptureCompositeMode::SCCM_Composite;
 			}
-		}
+			else
+			{
+				ViewFamily.EngineShowFlags.DisableAdvancedFeatures();
+				ViewFamily.EngineShowFlags.MotionBlur = 0;
+
+				// Resolve scene is needed for LDR rendering, no idea why
+				ViewFamily.bResolveScene = true;
+
+				ViewFamily.EngineShowFlags.SetScreenPercentage(false);
+				ViewFamily.EngineShowFlags.Fog = 0;
+				ViewFamily.EngineShowFlags.DepthOfField = 0;
+				ViewFamily.EngineShowFlags.LocalExposure = 0;
+				ViewFamily.EngineShowFlags.EyeAdaptation = 0;
+				ViewFamily.EngineShowFlags.Vignette = 0;
+				ViewFamily.EngineShowFlags.Grain = 0;
+				ViewFamily.EngineShowFlags.Atmosphere = 0;
+				ViewFamily.EngineShowFlags.LOD = 0;
+				ViewFamily.EngineShowFlags.NaniteMeshes = 1;
+				ViewFamily.EngineShowFlags.NaniteStreamingGeometry = 1;
+				ViewFamily.EngineShowFlags.AntiAliasing = 0;
+				ViewFamily.EngineShowFlags.PostProcessMaterial = 0;
+				ViewFamily.EngineShowFlags.PostProcessing = CreationParams.CreationConfig.bEnablePostProcessing;
+				ViewFamily.EngineShowFlags.Bloom = CreationParams.CreationConfig.bEnableBloom;
+
+				ViewFamily.SceneCaptureSource = ESceneCaptureSource::SCS_FinalColorLDR;
+				ViewFamily.SceneCaptureCompositeMode = ESceneCaptureCompositeMode::SCCM_Overwrite;
+			}
+
+			FSceneView* View = ThisThumbnailScene->CreateView(&ViewFamily, 0, 0, CreationParams.Width, CreationParams.Height);
+			if (!View)
+			{
+				return;
+			}
+
+			View->BackgroundColor = CreationParams.CreationConfig.GetAdjustedBackgroundColor();
+			if (bApplyCreationDelegate && CreationParams.CreationDelegate.IsBound())
+			{
+				CreationParams.CreationConfig = CreationParams.CreationDelegate.Execute(CreationParams.CreationConfig, ThisThumbnailScene->GetPreviewActor().Get());
+			}
+
+			RenderViewFamily(CreationParams.Canvas, &ViewFamily, View);
+		};
+
+		RenderSinglePass(true);
 	}
+
+	DestroyThumbnailScene();
 }
 
 bool UBlueprintThumbnailExporterRenderer::CanVisualizeAsset(UObject* Object)
@@ -212,9 +208,9 @@ bool UBlueprintThumbnailExporterRenderer::CanVisualizeAsset(UObject* Object)
 
 void UBlueprintThumbnailExporterRenderer::BeginDestroy()
 {
-	for (FThumbnailExporterScene* ThumbnailScene : ThumbnailScenes)
+	for (FThumbnailExporterScene* ThisThumbnailScene : ThumbnailScenes)
 	{
-		delete ThumbnailScene;
+		delete ThisThumbnailScene;
 	}
 	ThumbnailScenes.Empty();
 
@@ -243,13 +239,5 @@ void UBlueprintThumbnailExporterRenderer::RenderViewFamily(FCanvas* Canvas, FSce
 
 FThumbnailExporterScene& UBlueprintThumbnailExporterRenderer::GetThumbnailScene(const FThumbnailCreationConfig& CreationConfig)
 {
-	for (FThumbnailExporterScene* ThumbnailScene : ThumbnailScenes)
-	{
-		if (ThumbnailScene->GetBackgroundMeshesHidden() == CreationConfig.bHideThumbnailBackgroundMeshes)
-		{
-			return *ThumbnailScene;
-		}
-	}
-
 	return *ThumbnailScenes.Add_GetRef(new FThumbnailExporterScene(CreationConfig.bHideThumbnailBackgroundMeshes));
 }

@@ -40,7 +40,7 @@ static void TransitionAndCopyTexture(FRHICommandList& RHICmdList, FRHITexture* S
 FObjectThumbnail* FThumbnailExporterRenderer::GenerateThumbnail(FThumbnailCreationConfig& CreationConfig, UObject* InObject, const FPreCreateThumbnail& CreationDelegate)
 {
 	// Does the object support thumbnails?
-	FThumbnailRenderingInfo* RenderInfo = GUnrealEd ? GUnrealEd->GetThumbnailManager()->GetRenderingInfo(UThumbnailExporterThumbnailDummy::StaticClass()->ClassDefaultObject) : nullptr;
+	FThumbnailRenderingInfo* RenderInfo = GUnrealEd ? GUnrealEd->GetThumbnailManager()->GetRenderingInfo(UThumbnailExporterThumbnailDummy::StaticClass()->GetDefaultObject()) : nullptr;
 	if (RenderInfo != NULL && RenderInfo->Renderer != nullptr)
 	{
 		// Set the size of cached thumbnails
@@ -122,7 +122,7 @@ void FThumbnailExporterRenderer::RenderThumbnail(FThumbnailCreationConfig& Creat
 	FThumbnailRenderTargetResource AlphaThumbnail = CreateThumbnailRenderTarget(InImageWidth, InImageHeight, CreationConfig.GetAdjustedBackgroundColor());
 
 	// Get the rendering info for this object
-	FThumbnailRenderingInfo* RenderInfo = GUnrealEd ? GUnrealEd->GetThumbnailManager()->GetRenderingInfo(UThumbnailExporterThumbnailDummy::StaticClass()->ClassDefaultObject) : nullptr;
+	FThumbnailRenderingInfo* RenderInfo = GUnrealEd ? GUnrealEd->GetThumbnailManager()->GetRenderingInfo(UThumbnailExporterThumbnailDummy::StaticClass()->GetDefaultObject()) : nullptr;
 
 	// Wait for all textures to be streamed in before we render the thumbnail
 	// @todo CB: This helps but doesn't result in 100%-streamed-in resources every time! :(

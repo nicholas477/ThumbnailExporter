@@ -14,8 +14,81 @@
 #include "ThumbnailExporterRenderer.h"
 #include "BlueprintThumbnailExporterRenderer.h"
 #include "ThumbnailExporterThumbnailDummy.h"
+#include "UObject/StrongObjectPtr.h"
 
 #define LOCTEXT_NAMESPACE "FThumbnailExporterModule"
+
+namespace
+{
+	constexpr int32 NaniteFeedbackWarmupFrames = 8;
+
+	class FAsyncThumbnailExportState
+	{
+	public:
+		FAsyncThumbnailExportState(const FThumbnailCreationConfig& InConfig, const FAssetData& InAsset, FOnThumbnailExportCompleted InCompletion, const FPreCreateThumbnail& InCreationDelegate)
+			: CreationConfig(InConfig)
+			, Asset(InAsset)
+			, AssetObject(InAsset.GetAsset())
+			, Completion(MoveTemp(InCompletion))
+			, CreationDelegate(InCreationDelegate)
+			, RemainingWarmupFrames(NaniteFeedbackWarmupFrames)
+		{
+		}
+
+		bool Tick()
+		{
+			if (!AssetObject.IsValid())
+			{
+				return Complete(false, FString());
+			}
+
+			if (RemainingWarmupFrames > 0)
+			{
+				FThumbnailCreationConfig WarmupConfig = CreationConfig;
+				if (FThumbnailExporterRenderer::GenerateThumbnail(WarmupConfig, AssetObject.Get()) == nullptr)
+				{
+					return Complete(false, FString());
+				}
+
+				--RemainingWarmupFrames;
+				return true;
+			}
+
+			FString ThumbnailPath;
+			const bool bSucceeded = FThumbnailExporterModule::ExportThumbnail(CreationConfig, Asset, ThumbnailPath, CreationDelegate);
+			return Complete(bSucceeded, ThumbnailPath);
+		}
+
+	private:
+		bool Complete(bool bSucceeded, const FString& ThumbnailPath)
+		{
+			Completion.ExecuteIfBound(bSucceeded, ThumbnailPath);
+			return false;
+		}
+
+		FThumbnailCreationConfig CreationConfig;
+		FAssetData Asset;
+		TStrongObjectPtr<UObject> AssetObject;
+		FOnThumbnailExportCompleted Completion;
+		FPreCreateThumbnail CreationDelegate;
+		int32 RemainingWarmupFrames;
+	};
+
+	void QueueThumbnailExport(const FThumbnailCreationConfig& CreationConfig, const FAssetData& Asset)
+	{
+		FModuleManager::GetModuleChecked<FThumbnailExporterModule>(TEXT("ThumbnailExporter")).ExportThumbnailAsync(
+			CreationConfig,
+			Asset,
+			FOnThumbnailExportCompleted::CreateLambda([Asset](bool bSucceeded, const FString&)
+			{
+				if (!bSucceeded)
+				{
+					UE_LOG(LogTemp, Warning, TEXT("Failed to export thumbnail for %s"), *Asset.GetObjectPathString());
+				}
+			}));
+	}
+}
+
 void FThumbnailExporterModule::StartupModule()
 {
 	UThumbnailManager::Get().RegisterCustomRenderer(UThumbnailExporterThumbnailDummy::StaticClass(), UBlueprintThumbnailExporterRenderer::StaticClass());
@@ -25,7 +98,23 @@ void FThumbnailExporterModule::StartupModule()
 
 void FThumbnailExporterModule::ShutdownModule()
 {
+	for (const FTSTicker::FDelegateHandle& Handle : AsyncExportTickerHandles)
+	{
+		FTSTicker::GetCoreTicker().RemoveTicker(Handle);
+	}
+	AsyncExportTickerHandles.Empty();
+
 	RemoveContentBrowserContextMenuExtender();
+}
+
+void FThumbnailExporterModule::ExportThumbnailAsync(const FThumbnailCreationConfig& CreationConfig, const FAssetData& Asset, FOnThumbnailExportCompleted Completion, const FPreCreateThumbnail& CreationDelegate)
+{
+	TSharedRef<FAsyncThumbnailExportState> State = MakeShared<FAsyncThumbnailExportState>(CreationConfig, Asset, MoveTemp(Completion), CreationDelegate);
+	const FTSTicker::FDelegateHandle Handle = FTSTicker::GetCoreTicker().AddTicker(FTickerDelegate::CreateLambda([State](float)
+	{
+		return State->Tick();
+	}));
+	AsyncExportTickerHandles.Add(Handle);
 }
 
 void FThumbnailExporterModule::AddContentBrowserContextMenuExtender()
@@ -104,8 +193,7 @@ void FThumbnailExporterModule::ExecuteSaveThumbnailAsTexture(FMenuBuilder& MenuB
 					{
 						if (CanCreateThumbnail({ Asset }))
 						{
-							FString OutFilePath;
-							ExportThumbnail(UThumbnailExporterSettings::Get()->ThumbnailCreationPresets[0].PresetConfig, Asset, OutFilePath);
+							QueueThumbnailExport(UThumbnailExporterSettings::Get()->ThumbnailCreationPresets[0].PresetConfig, Asset);
 						}
 					}
 				})),
@@ -137,8 +225,7 @@ void FThumbnailExporterModule::ExecuteSaveThumbnailAsTexture(FMenuBuilder& MenuB
 								{
 									if (CanCreateThumbnail({ Asset }))
 									{
-										FString OutFilePath;
-										ExportThumbnail(UThumbnailExporterSettings::Get()->ThumbnailCreationPresets[i].PresetConfig, Asset, OutFilePath);
+									QueueThumbnailExport(UThumbnailExporterSettings::Get()->ThumbnailCreationPresets[i].PresetConfig, Asset);
 									}
 								}
 							})),
@@ -241,6 +328,8 @@ bool FThumbnailExporterModule::ExportThumbnail(const FThumbnailCreationConfig& C
 
 	NewTexture->Source.Init(Thumb->GetImageWidth(), Thumb->GetImageHeight(), 1, 1, ETextureSourceFormat::TSF_BGRA8, Thumb->GetUncompressedImageData().GetData());
 	NewTexture->LODGroup = ModifiedCreationConfig.ThumbnailTextureGroup;
+	NewTexture->MipGenSettings = ModifiedCreationConfig.MipMapSettings;
+	NewTexture->MaxTextureSize = ModifiedCreationConfig.MaxTextureSize;
 	NewTexture->UpdateResource();
 	Package->MarkPackageDirty();
 	Package->FullyLoad();
